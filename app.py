@@ -511,8 +511,7 @@ def apply_overrides(df: pd.DataFrame, conn: sqlite3.Connection) -> pd.DataFrame:
 
 
 def save_overrides(
-    original: pd.DataFrame, edited: pd.DataFrame, conn: sqlite3.Connection,
-    username: str = "unknown"
+    original: pd.DataFrame, edited: pd.DataFrame, conn: sqlite3.Connection
 ) -> int:
     cols = ["order_key", "Scheduled date", "Comments"]
     for c in cols:
@@ -548,7 +547,11 @@ def save_overrides(
         )
         if date_is_current and comment.strip() in (NEW_ORDER_COMMENT, PAST_DUE_COMMENT):
             comment = ""
-        now_str = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M ET")
+        modified_by = str(row.get("Modified by") or "").strip()
+        modified_at = str(row.get("Modified at") or "").strip()
+        # Auto-stamp time if user left Modified at blank
+        if not modified_at:
+            modified_at = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M ET")
         cur.execute(
             """
             INSERT INTO followup_overrides (order_key, follow_up, comments, modified_by, modified_at)
@@ -559,7 +562,7 @@ def save_overrides(
                 modified_by=excluded.modified_by,
                 modified_at=excluded.modified_at
             """,
-            (row["order_key"], str(sd) if pd.notna(sd) else None, comment, username, now_str),
+            (row["order_key"], str(sd) if pd.notna(sd) else None, comment, modified_by, modified_at),
         )
     conn.commit()
     return len(changed)
@@ -773,46 +776,6 @@ def main() -> None:
     if "Sales" in df.columns:
         df["Sales"] = pd.to_numeric(df["Sales"], errors="coerce")
 
-    # ─── Resolve logged-in user ──────────────────────────────
-    # Try Streamlit Cloud SSO first; fall back to session prompt
-    username = ""
-    try:
-        user_obj = getattr(st, "user", None) or getattr(st, "experimental_user", None)
-        if user_obj is not None:
-            username = getattr(user_obj, "email", "") or ""
-            if not username and hasattr(user_obj, "get"):
-                username = user_obj.get("email", "")
-    except Exception:
-        pass
-
-    if not username:
-        username = st.session_state.get("username", "")
-
-    if not username:
-        render_navbar(LOGO_PATH)
-        st.markdown(
-            """
-            <div style="max-width:380px;margin:4rem auto;background:#ffffff;border:1px solid #e2e8f0;
-                        border-radius:12px;padding:2rem;box-shadow:0 4px 16px rgba(0,0,0,0.07);">
-                <div style="font-size:1.1rem;font-weight:700;color:#0c1f3a;margin-bottom:0.3rem;">
-                    Who are you?
-                </div>
-                <div style="font-size:0.85rem;color:#64748b;margin-bottom:1.2rem;">
-                    Enter your name so edits are tracked correctly.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        col_inp, col_btn = st.columns([3, 1])
-        with col_inp:
-            name_input = st.text_input("Your name", placeholder="e.g. Tina", label_visibility="collapsed")
-        with col_btn:
-            if st.button("Continue", use_container_width=True) and name_input.strip():
-                st.session_state["username"] = name_input.strip()
-                st.rerun()
-        return
-
     # ─── Navbar ──────────────────────────────────────────────
     render_navbar(LOGO_PATH)
 
@@ -845,8 +808,8 @@ def main() -> None:
         "Scheduled date": st.column_config.DateColumn("Scheduled date"),
         "⚠️": st.column_config.TextColumn("⚠️", disabled=True, width="small"),
         "Comments": st.column_config.TextColumn("Comments", width="large"),
-        "Modified by": st.column_config.TextColumn("Modified by", disabled=True, width="medium"),
-        "Modified at": st.column_config.TextColumn("Modified at", disabled=True, width="medium"),
+        "Modified by": st.column_config.TextColumn("Modified by", width="medium"),
+        "Modified at": st.column_config.TextColumn("Modified at", width="medium"),
     }
     for col in display_df.columns:
         if col not in ("Row", "Cases #", "Sales", "Scheduled date", "⚠️", "Comments", "Modified by", "Modified at"):
@@ -870,7 +833,7 @@ def main() -> None:
     col_save, col_mid, col_send = st.columns([2, 6, 2])
     with col_save:
         if st.button("💾  Save Changes", use_container_width=True):
-            n = save_overrides(base_df, edited_df, conn, username=username)
+            n = save_overrides(base_df, edited_df, conn)
             if n > 0:
                 st.success(f"✓ Saved {n} updated row(s).")
             else:
