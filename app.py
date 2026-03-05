@@ -50,6 +50,26 @@ SENSIMEDICAL_CSS = """
     }
     /* Inputs – light border */
     .stTextInput input, .stDataFrame { border-radius: 6px; }
+    /* Center alignment for specific columns in main table:
+       Row (1), Cases # (3), Created Date (5), Scheduled date (6) */
+    .stDataFrame table tbody tr td:nth-child(1),
+    .stDataFrame table thead tr th:nth-child(1),
+    .stDataFrame table tbody tr td:nth-child(3),
+    .stDataFrame table thead tr th:nth-child(3),
+    .stDataFrame table tbody tr td:nth-child(5),
+    .stDataFrame table thead tr th:nth-child(5),
+    .stDataFrame table tbody tr td:nth-child(6),
+    .stDataFrame table thead tr th:nth-child(6) {
+        text-align: center !important;
+    }
+    /* Make Row column thin */
+    .stDataFrame table thead tr th:nth-child(1),
+    .stDataFrame table tbody tr td:nth-child(1) {
+        width: 3rem !important;
+        max-width: 3rem !important;
+        padding-left: 0.25rem;
+        padding-right: 0.25rem;
+    }
     /* Expander – light blue tint */
     .streamlit-expanderHeader { background-color: #f0f9ff; color: #1e3a5f; border-radius: 6px; }
     /* Alerts */
@@ -313,17 +333,37 @@ def main() -> None:
         return
 
     df = apply_overrides(base_df.copy(), conn)
+    # Sort by Created Date (oldest first) by default
+    if "Created Date" in df.columns:
+        df = df.sort_values(
+            "Created Date", ascending=True, kind="mergesort"
+        ).reset_index(drop=True)
+        # Display Created Date without time portion
+        df["Created Date"] = pd.to_datetime(
+            df["Created Date"], errors="coerce"
+        ).dt.date
+    # Add a 1-based row number for readability
+    df.insert(0, "Row", range(1, len(df) + 1))
+    # Ensure Sales is numeric so we can format as currency
+    if "Sales" in df.columns:
+        df["Sales"] = pd.to_numeric(df["Sales"], errors="coerce")
 
     st.write("Edit **Scheduled date** and **Comments** below.")
 
     # Show table without order_key (internal use only); only Scheduled date and Comments are editable
     display_df = df.drop(columns=["order_key"])
     column_config = {
+        "Row": st.column_config.NumberColumn(
+            "Row", disabled=True, width="small"
+        ),
+        "Sales": st.column_config.NumberColumn(
+            "Sales", format="$%.2f", disabled=True
+        ),
         "Scheduled date": st.column_config.DateColumn("Scheduled date"),
         "Comments": st.column_config.TextColumn("Comments", width="large"),
     }
     for col in display_df.columns:
-        if col not in ("Scheduled date", "Comments"):
+        if col not in ("Row", "Sales", "Scheduled date", "Comments"):
             column_config[col] = st.column_config.Column(col, disabled=True)
     edited_display = st.data_editor(
         display_df,
@@ -331,6 +371,7 @@ def main() -> None:
         num_rows="fixed",
         use_container_width=True,
         hide_index=True,
+        height=700,
     )
     # Reattach order_key for save logic
     edited_df = edited_display.copy()
