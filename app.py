@@ -45,7 +45,7 @@ SENSIMEDICAL_CSS = """
         align-items: center;
         justify-content: space-between;
         padding: 0 2rem;
-        height: 68px;
+        height: 56px;
         border-bottom: 1px solid rgba(255,255,255,0.06);
         box-shadow: 0 2px 16px rgba(0,0,0,0.25);
     }
@@ -54,32 +54,26 @@ SENSIMEDICAL_CSS = """
         align-items: center;
         gap: 10px;
     }
-    .sm-navbar-brand img { height: 48px; width: auto; }
-    .sm-navbar-center {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        color: #ffffff;
+    .sm-navbar-brand img { height: 28px; width: auto; }
+    .sm-navbar-title {
         font-family: 'DM Sans', sans-serif;
         font-weight: 600;
-        font-size: 1rem;
-        letter-spacing: -0.01em;
-        pointer-events: none;
-    }
-    .sm-navbar-badge {
-        background: linear-gradient(135deg, #0ea5e9, #0d9488);
-        color: white;
-        font-size: 0.7rem;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        padding: 3px 10px;
-        border-radius: 20px;
+        font-size: 0.85rem;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
+        color: rgba(255,255,255,0.55);
+    }
+    .sm-navbar-date {
+        color: rgba(255,255,255,0.75);
+        font-size: 0.85rem;
+        font-weight: 500;
+        font-family: 'DM Sans', sans-serif;
+        letter-spacing: 0.01em;
     }
 
     /* ─── Main content offset for fixed nav ─────────────── */
     .main .block-container {
-        padding-top: 4rem !important;
+        padding-top: 3.8rem !important;
         padding-left: 2.5rem !important;
         padding-right: 2.5rem !important;
         max-width: 1400px !important;
@@ -88,23 +82,16 @@ SENSIMEDICAL_CSS = """
     /* ─── Hero Header ────────────────────────────────────── */
     .sm-hero {
         text-align: center;
-        padding: 0.6rem 1rem 0.8rem;
-        margin-bottom: 0.8rem;
-        border-bottom: 1px solid #e2e8f0;
+        padding: 0.3rem 1rem 0.5rem;
+        margin-bottom: 0.5rem;
     }
     .sm-hero h1 {
         font-family: 'DM Sans', sans-serif !important;
         font-size: 2rem !important;
         font-weight: 700 !important;
         color: #0c1f3a !important;
-        margin: 0 0 0.35rem 0 !important;
+        margin: 0 0 0.5rem 0 !important;
         letter-spacing: -0.03em;
-    }
-    .sm-hero-date {
-        font-size: 1rem;
-        color: #64748b;
-        margin-bottom: 0.8rem;
-        font-weight: 400;
     }
     .sm-hero-stats {
         display: inline-flex;
@@ -144,7 +131,7 @@ SENSIMEDICAL_CSS = """
     .sm-cards {
         display: flex;
         gap: 1rem;
-        margin-bottom: 1rem;
+        margin-bottom: 0.6rem;
     }
     .sm-card {
         flex: 1;
@@ -637,13 +624,15 @@ def render_navbar(logo_path: Path) -> None:
         else '<span style="color:white;font-weight:700;font-size:1rem;letter-spacing:-0.02em;">SensiMedical</span>'
     )
 
+    today_str = date.today().strftime("%B %d, %Y")
     st.markdown(
         f"""
         <div class="sm-navbar">
             <div class="sm-navbar-brand">
                 {logo_html}
+                <span class="sm-navbar-title">Shipment Console</span>
             </div>
-            <div class="sm-navbar-center">Shipment Schedule Console</div>
+            <span class="sm-navbar-date">{today_str}</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -651,12 +640,10 @@ def render_navbar(logo_path: Path) -> None:
 
 
 def render_hero(df: pd.DataFrame) -> None:
-    today_str = date.today().strftime("%B %d, %Y")
     st.markdown(
-        f"""
+        """
         <div class="sm-hero">
             <h1>SensiMedical Shipment Schedule</h1>
-            <div class="sm-hero-date">{today_str}</div>
         </div>
         """,
         unsafe_allow_html=True,
