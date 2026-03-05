@@ -12,14 +12,26 @@ DB_PATH = BASE_DIR / "orders.db"
 LOGO_PATH = BASE_DIR / "assets" / "sensimedical-logo.png"
 FILE_PATTERNS = ("Pending Orders *.csv", "Pending Orders *.xlsx", "*.csv", "*.xlsx")
 
-# SensiMedical theme – aligned with sensimedical.com / sales-lot-tool
+# SensiMedical theme – using DM Sans / DM Mono and prettier layout
 SENSIMEDICAL_CSS = """
 <style>
-    /* Main – clean white */
-    .stApp { background-color: #ffffff; }
-    /* Top header bar – same convention as SensiMedical sales lot tool */
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+    /* Reset & base */
+    html, body, .stApp {
+        background-color: #f4f6f9 !important;
+        font-family: 'DM Sans', sans-serif !important;
+    }
+
+    /* Hide Streamlit chrome */
+    #MainMenu, footer, header { visibility: hidden; }
+    [data-testid="stSidebar"] { display: none; }
+    [data-testid="stSidebar"] ~ div { margin-left: 0 !important; }
+    [data-testid="stDecoration"] { display: none; }
+
+    /* Top header bar – reuse existing sensimedical-header container */
     .sensimedical-header {
-        background: linear-gradient(90deg, #1e3a5f 0%, #2d5a87 100%);
+        background: linear-gradient(90deg, #0c1f3a 0%, #2d5a87 100%);
         padding: 0.6rem 1.5rem;
         margin-left: calc(-50vw + 50%);
         margin-right: calc(-50vw + 50%);
@@ -29,53 +41,137 @@ SENSIMEDICAL_CSS = """
         display: flex;
         align-items: center;
         justify-content: center;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.25);
     }
-    .sensimedical-header img { height: 32px; width: auto; display: block; }
-    /* Hide sidebar */
-    [data-testid="stSidebar"] { display: none; }
-    [data-testid="stSidebar"] ~ div { margin-left: 0 !important; }
-    /* Main content headers – dark blue */
-    h1, h2, h3 { color: #1e3a5f !important; font-weight: 600; }
-    /* Primary button – SensiMedical teal accent */
-    .stButton > button {
-        background: linear-gradient(90deg, #0d9488 0%, #0f766e 100%) !important;
-        color: white !important;
-        border: none !important;
+    .sensimedical-header img {
+        height: 32px;
+        width: auto;
+        display: block;
+    }
+
+    /* Main content container offset */
+    .main .block-container {
+        padding-top: 1.5rem !important;
+        padding-left: 2.5rem !important;
+        padding-right: 2.5rem !important;
+        max-width: 1400px !important;
+    }
+
+    /* Headings */
+    h1, h2, h3 {
+        color: #0c1f3a !important;
         font-weight: 600 !important;
-        border-radius: 6px !important;
+        letter-spacing: -0.01em;
     }
-    .stButton > button:hover {
-        background: #0f766e !important;
-        color: white !important;
+
+    /* Data editor polish */
+    [data-testid="stDataEditor"] {
+        border-radius: 8px !important;
+        border: 1px solid #e2e8f0 !important;
+        font-family: 'DM Sans', sans-serif !important;
+        font-size: 0.85rem !important;
+        background: #ffffff !important;
     }
-    /* Inputs – light border */
-    .stTextInput input, .stDataFrame { border-radius: 6px; }
+    [data-testid="stDataEditor"] th {
+        background: #f8fafc !important;
+        color: #475569 !important;
+        font-size: 0.72rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.07em !important;
+        text-transform: uppercase !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+    }
+    [data-testid="stDataEditor"] td {
+        color: #0f172a !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+    }
+
     /* Center alignment for specific columns in main table:
        Row (1), Cases # (3), Created Date (5), Scheduled date (6) */
-    .stDataFrame table tbody tr td:nth-child(1),
-    .stDataFrame table thead tr th:nth-child(1),
-    .stDataFrame table tbody tr td:nth-child(3),
-    .stDataFrame table thead tr th:nth-child(3),
-    .stDataFrame table tbody tr td:nth-child(5),
-    .stDataFrame table thead tr th:nth-child(5),
-    .stDataFrame table tbody tr td:nth-child(6),
-    .stDataFrame table thead tr th:nth-child(6) {
+    [data-testid="stDataEditor"] table tbody tr td:nth-child(1),
+    [data-testid="stDataEditor"] table thead tr th:nth-child(1),
+    [data-testid="stDataEditor"] table tbody tr td:nth-child(3),
+    [data-testid="stDataEditor"] table thead tr th:nth-child(3),
+    [data-testid="stDataEditor"] table tbody tr td:nth-child(5),
+    [data-testid="stDataEditor"] table thead tr th:nth-child(5),
+    [data-testid="stDataEditor"] table tbody tr td:nth-child(6),
+    [data-testid="stDataEditor"] table thead tr th:nth-child(6) {
         text-align: center !important;
     }
     /* Make Row column thin */
-    .stDataFrame table thead tr th:nth-child(1),
-    .stDataFrame table tbody tr td:nth-child(1) {
+    [data-testid="stDataEditor"] table thead tr th:nth-child(1),
+    [data-testid="stDataEditor"] table tbody tr td:nth-child(1) {
         width: 3rem !important;
         max-width: 3rem !important;
         padding-left: 0.25rem;
         padding-right: 0.25rem;
     }
-    /* Expander – light blue tint */
-    .streamlit-expanderHeader { background-color: #f0f9ff; color: #1e3a5f; border-radius: 6px; }
+
+    /* Selectbox / inputs */
+    .stSelectbox > div > div {
+        background: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        font-family: 'DM Sans', sans-serif !important;
+        font-size: 0.87rem !important;
+        color: #0f172a !important;
+    }
+    .stTextInput input {
+        background: #f8fafc !important;
+        border-radius: 8px !important;
+    }
+
+    /* Primary button */
+    .stButton > button {
+        background: linear-gradient(135deg, #0c1f3a 0%, #1e3a5f 100%) !important;
+        color: white !important;
+        border: none !important;
+        font-family: 'DM Sans', sans-serif !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        letter-spacing: 0.04em !important;
+        border-radius: 8px !important;
+        padding: 0.55rem 1.8rem !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 2px 8px rgba(12,31,58,0.25) !important;
+    }
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #0d9488 0%, #0ea5e9 100%) !important;
+        box-shadow: 0 4px 16px rgba(13,148,136,0.3) !important;
+        transform: translateY(-1px) !important;
+    }
+
     /* Alerts */
-    [data-testid="stSuccess"] { border-left: 4px solid #0d9488; background: #f0fdfa; }
-    [data-testid="stWarning"] { border-left: 4px solid #2d5a87; background: #f0f9ff; }
-    [data-testid="stError"] { border-left: 4px solid #b91c1c; }
+    [data-testid="stSuccess"] {
+        background: #f0fdf9 !important;
+        border-left: 3px solid #0d9488 !important;
+        border-radius: 8px !important;
+        font-family: 'DM Sans', sans-serif !important;
+    }
+    [data-testid="stInfo"] {
+        background: #f0f9ff !important;
+        border-left: 3px solid #0ea5e9 !important;
+        border-radius: 8px !important;
+        font-family: 'DM Sans', sans-serif !important;
+    }
+    [data-testid="stWarning"] {
+        background: #fffbeb !important;
+        border-left: 3px solid #f59e0b !important;
+        border-radius: 8px !important;
+        font-family: 'DM Sans', sans-serif !important;
+    }
+    [data-testid="stError"] {
+        background: #fef2f2 !important;
+        border-left: 3px solid #ef4444 !important;
+        border-radius: 8px !important;
+    }
+
+    /* Caption / small text */
+    .stCaption, [data-testid="stCaptionContainer"] {
+        font-family: 'DM Sans', sans-serif !important;
+        color: #94a3b8 !important;
+        font-size: 0.78rem !important;
+    }
 </style>
 """
 
