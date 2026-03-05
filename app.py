@@ -45,7 +45,7 @@ SENSIMEDICAL_CSS = """
         align-items: center;
         justify-content: space-between;
         padding: 0 2rem;
-        height: 56px;
+        height: 68px;
         border-bottom: 1px solid rgba(255,255,255,0.06);
         box-shadow: 0 2px 16px rgba(0,0,0,0.25);
     }
@@ -54,7 +54,7 @@ SENSIMEDICAL_CSS = """
         align-items: center;
         gap: 10px;
     }
-    .sm-navbar-brand img { height: 28px; width: auto; }
+    .sm-navbar-brand img { height: 48px; width: auto; }
     .sm-navbar-title {
         font-family: 'DM Sans', sans-serif;
         font-weight: 600;
