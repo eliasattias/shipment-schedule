@@ -76,7 +76,7 @@ SENSIMEDICAL_CSS = """
 
     /* ─── Main content offset for fixed nav ─────────────── */
     .main .block-container {
-        padding-top: 5rem !important;
+        padding-top: 4rem !important;
         padding-left: 2.5rem !important;
         padding-right: 2.5rem !important;
         max-width: 1400px !important;
@@ -85,8 +85,8 @@ SENSIMEDICAL_CSS = """
     /* ─── Hero Header ────────────────────────────────────── */
     .sm-hero {
         text-align: center;
-        padding: 2rem 1rem 1.5rem;
-        margin-bottom: 1.5rem;
+        padding: 0.6rem 1rem 0.8rem;
+        margin-bottom: 0.8rem;
         border-bottom: 1px solid #e2e8f0;
     }
     .sm-hero h1 {
@@ -100,7 +100,7 @@ SENSIMEDICAL_CSS = """
     .sm-hero-date {
         font-size: 1rem;
         color: #64748b;
-        margin-bottom: 1.4rem;
+        margin-bottom: 0.8rem;
         font-weight: 400;
     }
     .sm-hero-stats {
@@ -135,6 +135,53 @@ SENSIMEDICAL_CSS = """
         letter-spacing: 0.09em;
         text-transform: uppercase;
         color: #94a3b8;
+    }
+
+    /* ─── Stat Cards ─────────────────────────────────────── */
+    .sm-cards {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .sm-card {
+        flex: 1;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 1rem 1.3rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+        position: relative;
+        overflow: hidden;
+    }
+    .sm-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+    }
+    .sm-card.blue::before  { background: linear-gradient(90deg, #0c1f3a, #2d5a87); }
+    .sm-card.teal::before  { background: linear-gradient(90deg, #0d9488, #0ea5e9); }
+    .sm-card.amber::before { background: linear-gradient(90deg, #f59e0b, #f97316); }
+    .sm-card.green::before { background: linear-gradient(90deg, #10b981, #0d9488); }
+    .sm-card-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #94a3b8;
+        margin-bottom: 0.3rem;
+    }
+    .sm-card-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #0c1f3a;
+        font-family: 'DM Mono', monospace;
+        line-height: 1;
+    }
+    .sm-card-sub {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        margin-top: 0.2rem;
     }
 
     /* ─── Table wrapper ──────────────────────────────────── */
@@ -600,10 +647,25 @@ def render_navbar(logo_path: Path) -> None:
 
 
 def render_hero(df: pd.DataFrame) -> None:
+    today_str = date.today().strftime("%B %d, %Y")
+    st.markdown(
+        f"""
+        <div class="sm-hero">
+            <h1>SensiMedical Shipment Schedule</h1>
+            <div class="sm-hero-date">{today_str}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    # Stat cards directly below the hero title
+    render_stat_cards(df)
+
+
+def render_stat_cards(df: pd.DataFrame) -> None:
     total = len(df)
     scheduled = int(df["Scheduled date"].notna().sum())
     unscheduled = total - scheduled
-    past_due = int(df["_past_due"].sum()) if "_past_due" in df.columns else 0
+    pct = int(scheduled / total * 100) if total > 0 else 0
 
     if "Sales" in df.columns:
         sales_val = pd.to_numeric(df["Sales"], errors="coerce").fillna(0).sum()
@@ -611,34 +673,28 @@ def render_hero(df: pd.DataFrame) -> None:
     else:
         sales_display = "—"
 
-    today_str = date.today().strftime("%B %d, %Y")
-
     st.markdown(
         f"""
-        <div class="sm-hero">
-            <h1>SensiMedical Shipment Schedule</h1>
-            <div class="sm-hero-date">{today_str}</div>
-            <div class="sm-hero-stats">
-                <div class="sm-stat">
-                    <div class="sm-stat-value">{total}</div>
-                    <div class="sm-stat-label">Total Orders</div>
-                </div>
-                <div class="sm-stat">
-                    <div class="sm-stat-value teal">{scheduled}</div>
-                    <div class="sm-stat-label">Scheduled</div>
-                </div>
-                <div class="sm-stat">
-                    <div class="sm-stat-value amber">{unscheduled}</div>
-                    <div class="sm-stat-label">Needs Date</div>
-                </div>
-                <div class="sm-stat">
-                    <div class="sm-stat-value amber">{past_due}</div>
-                    <div class="sm-stat-label">Past Due</div>
-                </div>
-                <div class="sm-stat">
-                    <div class="sm-stat-value green">{sales_display}</div>
-                    <div class="sm-stat-label">Total Sales</div>
-                </div>
+        <div class="sm-cards">
+            <div class="sm-card blue">
+                <div class="sm-card-label">Total Orders</div>
+                <div class="sm-card-value">{total}</div>
+                <div class="sm-card-sub">pending shipments</div>
+            </div>
+            <div class="sm-card teal">
+                <div class="sm-card-label">Scheduled</div>
+                <div class="sm-card-value">{scheduled}</div>
+                <div class="sm-card-sub">{pct}% of orders</div>
+            </div>
+            <div class="sm-card amber">
+                <div class="sm-card-label">Needs Date</div>
+                <div class="sm-card-value">{unscheduled}</div>
+                <div class="sm-card-sub">awaiting schedule</div>
+            </div>
+            <div class="sm-card green">
+                <div class="sm-card-label">Total Sales</div>
+                <div class="sm-card-value">{sales_display}</div>
+                <div class="sm-card-sub">order value</div>
             </div>
         </div>
         """,
