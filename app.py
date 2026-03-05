@@ -55,13 +55,16 @@ SENSIMEDICAL_CSS = """
         gap: 10px;
     }
     .sm-navbar-brand img { height: 48px; width: auto; }
-    .sm-navbar-title {
+    .sm-navbar-center {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #ffffff;
         font-family: 'DM Sans', sans-serif;
         font-weight: 600;
-        font-size: 0.85rem;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: rgba(255,255,255,0.55);
+        font-size: 1rem;
+        letter-spacing: -0.01em;
+        pointer-events: none;
     }
     .sm-navbar-badge {
         background: linear-gradient(135deg, #0ea5e9, #0d9488);
