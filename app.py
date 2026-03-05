@@ -1,3 +1,4 @@
+import base64
 import sqlite3
 from pathlib import Path
 
@@ -9,20 +10,30 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = BASE_DIR / "orders.db"
 LOGO_PATH = BASE_DIR / "assets" / "sensimedical-logo.png"
-FILE_PATTERNS = ("Pending Orders *.csv", "Pending Orders *.xlsx")
+FILE_PATTERNS = ("Pending Orders *.csv", "Pending Orders *.xlsx", "*.csv", "*.xlsx")
 
-# SensiMedical theme – aligned with sensimedical.com (clean, professional medical)
+# SensiMedical theme – aligned with sensimedical.com / sales-lot-tool
 SENSIMEDICAL_CSS = """
 <style>
-    /* Main – clean white/grey like SensiMedical site */
+    /* Main – clean white */
     .stApp { background-color: #ffffff; }
-    header[data-testid="stHeader"] { background: #fff; }
-    /* Sidebar – SensiMedical blue */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1e3a5f 0%, #2d5a87 100%);
+    /* Top header bar – same convention as SensiMedical sales lot tool */
+    .sensimedical-header {
+        background: linear-gradient(90deg, #1e3a5f 0%, #2d5a87 100%);
+        padding: 0.6rem 1.5rem;
+        margin-left: calc(-50vw + 50%);
+        margin-right: calc(-50vw + 50%);
+        margin-bottom: 1rem;
+        width: 100vw;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
-    [data-testid="stSidebar"] .stMarkdown { color: #e8eef4; }
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2 { color: #fff !important; }
+    .sensimedical-header img { height: 32px; width: auto; display: block; }
+    /* Hide sidebar */
+    [data-testid="stSidebar"] { display: none; }
+    [data-testid="stSidebar"] ~ div { margin-left: 0 !important; }
     /* Main content headers – dark blue */
     h1, h2, h3 { color: #1e3a5f !important; font-weight: 600; }
     /* Primary button – SensiMedical teal accent */
@@ -49,15 +60,22 @@ SENSIMEDICAL_CSS = """
 """
 
 
-def get_latest_file() -> Path | None:
+def get_all_pending_files() -> list[Path]:
     if not DATA_DIR.exists():
-        return None
+        return []
+    seen = set()
     files = []
     for pattern in FILE_PATTERNS:
-        files.extend(DATA_DIR.glob(pattern))
-    if not files:
-        return None
-    return max(files, key=lambda p: p.stat().st_mtime)
+        for p in DATA_DIR.glob(pattern):
+            if p.name not in seen:
+                seen.add(p.name)
+                files.append(p)
+    return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def get_latest_file() -> Path | None:
+    files = get_all_pending_files()
+    return files[0] if files else None
 
 
 def init_db() -> sqlite3.Connection:
@@ -66,16 +84,23 @@ def init_db() -> sqlite3.Connection:
         """
         CREATE TABLE IF NOT EXISTS followup_overrides (
             order_key TEXT PRIMARY KEY,
-            follow_up TEXT
+            follow_up TEXT,
+            comments TEXT
         )
         """
     )
+    try:
+        conn.execute("ALTER TABLE followup_overrides ADD COLUMN comments TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        conn.rollback()
     conn.commit()
     return conn
 
 
-def load_base_data() -> pd.DataFrame:
-    path = get_latest_file()
+def load_base_data(path: Path | None = None) -> pd.DataFrame:
+    if path is None:
+        path = get_latest_file()
     if not path:
         return pd.DataFrame()
 
@@ -84,64 +109,167 @@ def load_base_data() -> pd.DataFrame:
     else:
         df = pd.read_csv(path)
 
+    # Normalize column names (strip whitespace)
+    df.columns = df.columns.str.strip()
+
     # Parse dates (Excel may already give datetime)
     if "Created Date" in df.columns:
         df["Created Date"] = pd.to_datetime(df["Created Date"], errors="coerce")
-    if "Follow up" in df.columns:
-        df["Follow up"] = pd.to_datetime(df["Follow up"], errors="coerce").dt.date
 
-    # Build a stable order key (replace with real Order ID if available)
-    df["order_key"] = (
-        df["Customer"].astype(str)
-        + "|" + df["Created Date"].dt.strftime("%Y-%m-%d")
-        + "|" + df["Cases #"].astype(str)
-        + "|" + df["Sales"].astype(str)
-    )
+    # Scheduled date: daily files typically don't have it; we add it and fill from DB later
+    date_col = next((c for c in df.columns if c in ("Follow up", "Scheduled Date", "Scheduled date")), None)
+    if date_col:
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce").dt.date
+        if date_col != "Scheduled date":
+            df = df.rename(columns={date_col: "Scheduled date"})
+    if "Scheduled date" not in df.columns:
+        df["Scheduled date"] = pd.NaT
+    if "Comments" not in df.columns:
+        df["Comments"] = ""
+
+    # Build a stable order key and optionally group to the clean summary format.
+    if "SO Number" in df.columns and "Mfg Ref" in df.columns:
+        # Original/detail file: group by Customer + Created Date so the summary
+        # matches the clean Pending Orders layout (Customer, Cases #, Sales, Created Date).
+        df["_cust_key"] = df["Customer"].astype(str).str.strip()
+        df["_created_key"] = df["Created Date"]
+        qty = pd.to_numeric(df["Qty Order"], errors="coerce").fillna(0)
+        price = pd.to_numeric(df["Sales Price"], errors="coerce").fillna(0)
+        df["_sales_line"] = qty * price
+        grouped = df.groupby(["_cust_key", "_created_key"], as_index=False).agg(
+            Customer=("_cust_key", "first"),
+            **{"Created Date": ("_created_key", "first")},
+            Cases_num=("Qty Order", "sum"),
+            Sales=("_sales_line", "sum"),
+        )
+        grouped = grouped.rename(columns={"Cases_num": "Cases #"})
+        grouped["Sales"] = grouped["Sales"].round(2)
+        grouped["Created Date"] = pd.to_datetime(
+            grouped["Created Date"], errors="coerce"
+        )
+        grouped["Scheduled date"] = pd.NaT
+        grouped["Comments"] = ""
+        # order_key = Customer | YYYY-MM-DD (same as summary files)
+        grouped["order_key"] = (
+            grouped["Customer"].astype(str).str.strip()
+            + "|"
+            + grouped["Created Date"].dt.strftime("%Y-%m-%d")
+        )
+        df = grouped[
+            ["Customer", "Cases #", "Sales", "Created Date", "Scheduled date", "Comments", "order_key"]
+        ]
+    else:
+        # Pending Orders summary: Customer + Created Date (qty can change on partial dispatch)
+        def _norm_num(val):
+            if pd.isna(val):
+                return ""
+            s = str(val).strip().replace("$", "").replace(",", "").strip()
+            try:
+                return str(int(float(s)))
+            except (ValueError, TypeError):
+                return s
+
+        df["order_key"] = (
+            df["Customer"].astype(str).str.strip()
+            + "|" + df["Created Date"].dt.strftime("%Y-%m-%d")
+        )
 
     return df
 
 
 def apply_overrides(df: pd.DataFrame, conn: sqlite3.Connection) -> pd.DataFrame:
-    overrides = pd.read_sql_query(
-        "SELECT order_key, follow_up FROM followup_overrides", conn
-    )
-    if overrides.empty:
-        return df
-
-    overrides["follow_up"] = pd.to_datetime(overrides["follow_up"]).dt.date
-    df = df.merge(overrides, on="order_key", how="left", suffixes=("", "_override"))
-    df["Follow up"] = df["follow_up"].combine_first(df["Follow up"])
-    df = df.drop(columns=["follow_up"])
+    NEW_ORDER_COMMENT = "estimated date??"
+    try:
+        overrides = pd.read_sql_query(
+            "SELECT order_key, follow_up, comments FROM followup_overrides", conn
+        )
+    except sqlite3.OperationalError:
+        overrides = pd.read_sql_query(
+            "SELECT order_key, follow_up FROM followup_overrides", conn
+        )
+        overrides["comments"] = ""
+    if not overrides.empty:
+        overrides["follow_up"] = pd.to_datetime(overrides["follow_up"], errors="coerce").dt.date
+        # Build lookup: support both 3-part keys (Customer|Date|Cases) and old 4-part keys (with Sales)
+        key_to_date = {}
+        key_to_comments = {}
+        for _, row in overrides.iterrows():
+            k = row["order_key"]
+            key_to_date[k] = row["follow_up"]
+            key_to_comments[k] = str(row.get("comments") or "")
+            parts = k.split("|")
+            if len(parts) >= 4:
+                k_short = "|".join(parts[:3])
+                if k_short not in key_to_date:
+                    key_to_date[k_short] = row["follow_up"]
+                    key_to_comments[k_short] = str(row.get("comments") or "")
+            if len(parts) >= 2:
+                k_so = parts[0]
+                if k_so not in key_to_date:
+                    key_to_date[k_so] = row["follow_up"]
+                    key_to_comments[k_so] = str(row.get("comments") or "")
+        df["Scheduled date"] = df["order_key"].map(key_to_date).combine_first(df["Scheduled date"])
+        df["Comments"] = df["order_key"].map(key_to_comments).combine_first(df["Comments"].fillna("").astype(str))
+        # Ensure Scheduled date is a proper date type for display
+        df["Scheduled date"] = pd.to_datetime(df["Scheduled date"], errors="coerce").dt.date
+    # New orders (no saved scheduled date): auto-fill Comments so team knows to set a date
+    new_order = df["Scheduled date"].isna()
+    empty_comment = (df["Comments"].fillna("").astype(str).str.strip() == "")
+    df.loc[new_order & empty_comment, "Comments"] = NEW_ORDER_COMMENT
     return df
 
 
 def save_overrides(
     original: pd.DataFrame, edited: pd.DataFrame, conn: sqlite3.Connection
 ) -> int:
-    cols = ["order_key", "Follow up"]
-    orig = original[cols].rename(columns={"Follow up": "Follow_up_orig"})
-    merged = edited[cols].merge(orig, on="order_key")
-
-    # Detect changed rows (including filling in missing values)
+    cols = ["order_key", "Scheduled date", "Comments"]
+    for c in cols:
+        if c not in edited.columns:
+            return 0
+    orig = original[cols].rename(columns={"Scheduled date": "_sd_orig", "Comments": "_com_orig"})
+    merged = edited[cols].merge(
+        orig[["order_key", "_sd_orig", "_com_orig"]],
+        on="order_key",
+    )
+    merged["_sd_str"] = merged["Scheduled date"].astype(str)
+    merged["_com_str"] = merged["Comments"].fillna("").astype(str)
     changed = merged[
-        merged["Follow up"].astype(str) != merged["Follow_up_orig"].astype(str)
-    ].dropna(subset=["Follow up"])
+        (merged["_sd_str"] != merged["_sd_orig"].astype(str))
+        | (merged["_com_str"] != merged["_com_orig"].fillna("").astype(str))
+    ]
 
     if changed.empty:
         return 0
 
     cur = conn.cursor()
     for _, row in changed.iterrows():
+        sd = row["Scheduled date"]
         cur.execute(
             """
-            INSERT INTO followup_overrides (order_key, follow_up)
-            VALUES (?, ?)
-            ON CONFLICT(order_key) DO UPDATE SET follow_up=excluded.follow_up
+            INSERT INTO followup_overrides (order_key, follow_up, comments)
+            VALUES (?, ?, ?)
+            ON CONFLICT(order_key) DO UPDATE SET
+                follow_up=excluded.follow_up,
+                comments=excluded.comments
             """,
-            (row["order_key"], str(row["Follow up"]))
+            (row["order_key"], str(sd) if pd.notna(sd) else None, str(row["Comments"] or "")),
         )
     conn.commit()
     return len(changed)
+
+
+def render_top_header() -> None:
+    """Render SensiMedical top header bar with logo (same convention as sales-lot-tool)."""
+    if not LOGO_PATH.exists():
+        return
+    raw = LOGO_PATH.read_bytes()
+    b64 = base64.b64encode(raw).decode()
+    mime = "image/png" if LOGO_PATH.suffix.lower() == ".png" else "image/jpeg"
+    src = f"data:{mime};base64,{b64}"
+    st.markdown(
+        f'<div class="sensimedical-header"><img src="{src}" alt="SensiMedical" /></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def main() -> None:
@@ -151,21 +279,7 @@ def main() -> None:
         page_icon="📦",
     )
     st.markdown(SENSIMEDICAL_CSS, unsafe_allow_html=True)
-
-    # SensiMedical logo in sidebar
-    if LOGO_PATH.exists():
-        st.sidebar.image(str(LOGO_PATH), use_container_width=True)
-    st.sidebar.markdown("---")
-    st.sidebar.header("Daily workflow")
-    st.sidebar.markdown(
-        f"""
-        1. Export/download today's **Pending Orders** file (CSV or Excel).
-        2. Save or move it into the `data` folder:
-           `{DATA_DIR}`
-        3. Reload this page (or use Streamlit's rerun button).
-        4. Edit **Follow up** dates and click **Save changes**.
-        """
-    )
+    render_top_header()
 
     st.title("Pending Orders – Schedule Manager")
     st.caption("SensiMedical™ Shipment Schedule")
@@ -178,34 +292,44 @@ def main() -> None:
         return
 
     conn = init_db()
-    base_df = load_base_data()
-    if base_df.empty:
+    all_files = get_all_pending_files()
+    if not all_files:
         st.warning(
             "No 'Pending Orders' file found in the `data` folder.\n\n"
             "Expected: `Pending Orders *.csv` or `Pending Orders *.xlsx`"
         )
         return
 
+    # Let user pick which file to load (e.g. load March 3 to save dates, then March 4 to see them)
+    file_options = [f.name for f in all_files]
+    default_idx = 0
+    selected_name = st.selectbox(
+        "File to load",
+        file_options,
+        index=default_idx,
+        help="Choose which pending orders file to view. Use the latest for today; pick an older file to copy its dates into the app and Save, then load the latest again.",
+    )
+    selected_path = all_files[file_options.index(selected_name)]
+    base_df = load_base_data(selected_path)
+    if base_df.empty:
+        return
+
     df = apply_overrides(base_df.copy(), conn)
 
-    with st.expander("Filters", expanded=True):
-        customer_filter = st.text_input("Filter by customer (contains):", "")
-        if customer_filter:
-            df = df[
-                df["Customer"]
-                .astype(str)
-                .str.contains(customer_filter, case=False, na=False)
-            ]
+    st.write("Edit **Scheduled date** and **Comments** below.")
 
-    st.write("Edit the **Follow up** date using the calendar.")
-
-    # Show table without order_key (internal use only)
+    # Show table without order_key (internal use only); only Scheduled date and Comments are editable
     display_df = df.drop(columns=["order_key"])
+    column_config = {
+        "Scheduled date": st.column_config.DateColumn("Scheduled date"),
+        "Comments": st.column_config.TextColumn("Comments", width="large"),
+    }
+    for col in display_df.columns:
+        if col not in ("Scheduled date", "Comments"):
+            column_config[col] = st.column_config.Column(col, disabled=True)
     edited_display = st.data_editor(
         display_df,
-        column_config={
-            "Follow up": st.column_config.DateColumn("Follow up"),
-        },
+        column_config=column_config,
         num_rows="fixed",
         use_container_width=True,
         hide_index=True,
@@ -217,7 +341,7 @@ def main() -> None:
     if st.button("Save changes"):
         n = save_overrides(base_df, edited_df, conn)
         if n > 0:
-            st.success(f"Saved {n} updated follow-up date(s).")
+            st.success(f"Saved {n} updated row(s).")
         else:
             st.info("No changes to save.")
 
