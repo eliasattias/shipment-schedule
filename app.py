@@ -17,7 +17,16 @@ FILE_PATTERNS = ("Pending Orders *.csv", "Pending Orders *.xlsx", "*.csv", "*.xl
 
 # ── Resend email config ───────────────────────────────────────────────────────
 RESEND_API_KEY = st.secrets.get("RESEND_API_KEY", os.getenv("RESEND_API_KEY", ""))
-NOTIFY_EMAILS  = ["elias.a@sensimedical.com", "alice.s@sensimedical.com", "eduardo.s@sensimedical.com"]
+NOTIFY_EMAILS = [
+    "alice.s@sensimedical.com",
+    "elias.a@sensimedical.com",
+    "eduardo.s@sensimedical.com",
+    "customercare@optimalmax.com",
+    "cjohnson@optimalmax.com",
+    "sbroussard@optimalmax.com",
+    "pbigley@optimalmax.com",
+    "fstivers@optimalmax.com",
+]
 NOTIFY_FROM    = "SensiMedical Schedule <schedule@sensimedical.com>"
 
 SENSIMEDICAL_CSS = """
