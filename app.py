@@ -767,15 +767,31 @@ def main() -> None:
     if "Sales" in df.columns:
         df["Sales"] = pd.to_numeric(df["Sales"], errors="coerce")
 
-    # ─── Resolve logged-in user ──────────────────────────────
+    # ─── Resolve logged-in user (auto from Google SSO) ───────
     try:
-        user_info = st.context.headers.get("X-Streamlit-User", "")
-        username = user_info if user_info else st.experimental_user.get("email", "unknown")
+        # st.user is the current API; experimental_user is legacy fallback
+        user_obj = getattr(st, "user", None) or getattr(st, "experimental_user", None)
+        email = ""
+        if user_obj is not None:
+            email = getattr(user_obj, "email", "") or ""
+            # Sometimes it comes back as a dict-like object
+            if not email and hasattr(user_obj, "get"):
+                email = user_obj.get("email", "")
+        username = email if email else "unknown"
     except Exception:
         username = "unknown"
 
     # ─── Navbar ──────────────────────────────────────────────
     render_navbar(LOGO_PATH)
+
+    # ── Temp debug: remove once username is confirmed working ─
+    with st.expander("🔍 Debug: user info", expanded=False):
+        try:
+            st.write("st.user:", dict(st.user) if hasattr(st, "user") else "n/a")
+            st.write("st.experimental_user:", dict(st.experimental_user) if hasattr(st, "experimental_user") else "n/a")
+        except Exception as e:
+            st.write("Error reading user:", e)
+        st.write("Resolved username:", username)
 
     # ─── Hero header + stats ──────────────────────────────────
     render_hero(df)
