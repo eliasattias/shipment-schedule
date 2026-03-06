@@ -131,15 +131,31 @@ class EmailAutomation:
                             ).execute()
 
                             data = base64.urlsafe_b64decode(attachment['data'])
-                            
-                            # Always save as .xlsx regardless of original extension
-                            filepath = self.data_dir / self.target_filename
 
-                            with open(filepath, 'wb') as f:
+                            # first save raw file using original extension in case conversion needed
+                            raw_path = self.data_dir / filename
+                            with open(raw_path, 'wb') as f:
                                 f.write(data)
 
-                            logging.info(f"Downloaded attachment: {filename} -> {filepath}")
-                            return filepath
+                            # target .xlsx path (whatever TARGET_FILENAME is)
+                            final_path = self.data_dir / self.target_filename
+
+                            # attempt to convert if the download was .xls
+                            if raw_path.suffix.lower() == '.xls':
+                                try:
+                                    df = pd.read_excel(raw_path, engine='xlrd')
+                                    df.to_excel(final_path, index=False)
+                                    logging.info(f"Converted {raw_path.name} to xlsx -> {final_path}")
+                                except Exception as conv_err:
+                                    logging.warning(f"Conversion from .xls failed: {conv_err}")
+                                    # fallback: just rename raw file
+                                    raw_path.replace(final_path)
+                            else:
+                                # if already xlsx just move it
+                                raw_path.replace(final_path)
+
+                            logging.info(f"Downloaded attachment: {filename} -> {final_path}")
+                            return final_path
 
             return None
 
@@ -173,6 +189,17 @@ class EmailAutomation:
                     logging.debug(f"Engine {engine} failed: {str(e)[:80]}")
                     continue
             
+            # last ditch: if file still cannot be read but has .xls extension,
+            # try converting it in-place and then re-validate
+            if filepath.suffix.lower() == '.xls':
+                try:
+                    df = pd.read_excel(filepath, engine='xlrd')
+                    df.to_excel(filepath.with_suffix('.xlsx'), index=False)
+                    logging.info(f"Converted failing .xls to .xlsx for validation")
+                    return self.validate_excel_file(filepath.with_suffix('.xlsx'))
+                except Exception:
+                    pass
+
             # Log warning but return True since file was downloaded successfully
             logging.warning(f"Could not parse file as Excel, but file exists and has content")
             return True
