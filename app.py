@@ -26,6 +26,7 @@ NOTIFY_EMAILS = [
     "sbroussard@optimalmax.com",
     "pbigley@optimalmax.com",
     "fstivers@optimalmax.com",
+    "tperez@optimalmax.com"
 ]
 NOTIFY_FROM    = "SensiMedical Schedule <schedule@sensimedical.com>"
 
