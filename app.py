@@ -28,7 +28,7 @@ NOTIFY_EMAILS = [
     "fstivers@optimalmax.com",
     "tperez@optimalmax.com"
 ]
-NOTIFY_FROM    = "SensiMedical Schedule <schedule@sensimedical.com>"
+NOTIFY_FROM    = "Sensimedical Pending Orders Schedule <info@sensimedical.com>"
 
 SENSIMEDICAL_CSS = """
 <style>
@@ -608,7 +608,7 @@ def send_update_email(df: pd.DataFrame) -> tuple[bool, str]:
     <div style="font-family:'DM Sans',Arial,sans-serif;max-width:720px;margin:0 auto;">
       <div style="background:#0c1f3a;padding:18px 24px;border-radius:8px 8px 0 0;">
         <span style="color:white;font-size:1.1rem;font-weight:600;letter-spacing:-0.01em;">
-          SensiMedical — Shipment Schedule Update
+          Sensimedical — Shipment Schedule Update
         </span>
       </div>
       <div style="background:#f4f6f9;padding:16px 24px;border-bottom:1px solid #e2e8f0;">
@@ -649,7 +649,7 @@ def send_update_email(df: pd.DataFrame) -> tuple[bool, str]:
             json={
                 "from": NOTIFY_FROM,
                 "to": NOTIFY_EMAILS,
-                "subject": f"Schedule Update — {today} ({total} orders, {scheduled} scheduled)",
+                "subject": f"Sensimedical Pending Orders Schedule Update — {today} ({total} orders, {scheduled} scheduled)",
                 "html": html_body,
             },
             timeout=10,
