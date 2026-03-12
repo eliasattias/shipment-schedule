@@ -7,7 +7,56 @@ This is a small Streamlit app that lets your team view the daily **Pending Order
 - `app.py` – main Streamlit app
 - `requirements.txt` – Python dependencies
 - `data/` – place your daily `Pending Orders *.csv` file(s) here
-- `orders.db` – created automatically; stores user-edited follow-up dates
+- `orders.db` – created automatically when using the local SQLite backend; stores user-edited follow-up dates
+
+
+### Cloud database (PostgreSQL) 🔗
+
+By default the app uses a local SQLite file (`orders.db`) which is fine for a
+single user. To allow multiple team members or deployed instances of the app
+to share updates you can point the app at a cloud database such as
+PostgreSQL. Streamlit Cloud, Heroku, Supabase, ElephantSQL, and many other
+services provide free or low-cost PostgreSQL instances.
+
+To enable:
+
+1. Provision a PostgreSQL database and obtain its connection URL, which looks
+   like `postgresql://user:password@host:port/dbname`.
+2. Set the URL in your environment or Streamlit secrets using the key
+   `DATABASE_URL`.
+
+   ```python
+   # either in .streamlit/secrets.toml:
+   DATABASE_URL = "postgresql://..."
+   # or as an environment variable:
+   # export DATABASE_URL="postgresql://..."  (Linux/Mac)
+   # setx DATABASE_URL "postgresql://..."        (Windows)
+   ```
+
+3. Add `psycopg2-binary` to your `requirements.txt` (already included). Install
+   dependencies again if necessary:
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+4. The app will automatically detect the URL and use PostgreSQL. If no URL is
+   set it falls back to the local `orders.db` file.
+
+5. **Migration:** If you already have overrides stored locally, you can
+   migrate them by dumping the SQLite table and importing into PostgreSQL. A
+   simple command-line sequence might look like:
+
+   ```bash
+   # export SQLite rows as CSV
+   sqlite3 orders.db "SELECT * FROM followup_overrides;" > overrides.csv
+   # import into PostgreSQL (adjust flags as needed)
+   psql "$DATABASE_URL" -c "\copy followup_overrides FROM 'overrides.csv' CSV;"
+   ```
+
+6. Once the cloud database is in use, multiple users and deployed app instances
+   will see each other's changes. Uploading a new file will still apply
+   overrides by matching `order_key` so existing rows aren’t overwritten but
+   updated.
 
 ### Python & virtual environment setup
 

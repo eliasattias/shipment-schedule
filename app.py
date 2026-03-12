@@ -1,9 +1,16 @@
 import base64
 import os
 import sqlite3
+import os
 from pathlib import Path
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
+
+# optional dependency for cloud database
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
 
 import pandas as pd
 import requests
@@ -358,7 +365,37 @@ def get_latest_file() -> Path | None:
     return files[0] if files else None
 
 
-def init_db() -> sqlite3.Connection:
+def init_db() -> sqlite3.Connection | "psycopg2.extensions.connection":
+    """Initialize and return a database connection.
+
+    Look for a cloud database URL in Streamlit secrets or the
+    `DATABASE_URL` environment variable. If one is provided, use
+    `psycopg2` to connect to PostgreSQL; otherwise fall back to a local
+    SQLite file (`orders.db`). This allows multiple users/deployments to
+    share overrides when the app is deployed.
+    """
+    db_url = st.secrets.get("DATABASE_URL", os.getenv("DATABASE_URL", ""))
+    if db_url:
+        if psycopg2 is None:
+            st.error("PostgreSQL support requires psycopg2; please add it to requirements.")
+            st.stop()
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS followup_overrides (
+                order_key TEXT PRIMARY KEY,
+                follow_up TEXT,
+                comments TEXT,
+                modified_by TEXT,
+                modified_at TEXT
+            )
+            """
+        )
+        conn.commit()
+        return conn
+
+    # no cloud URL, use local SQLite
     conn = sqlite3.connect(DB_PATH)
     conn.execute(
         """
@@ -547,16 +584,26 @@ def save_overrides(
     today = date.today()
 
     cur = conn.cursor()
+    # determine placeholder style: SQLite uses ?, psycopg2 uses %s
+    if psycopg2 and isinstance(conn, psycopg2.extensions.connection):
+        ph = "%s"
+    else:
+        ph = "?"
     for _, row in changed.iterrows():
         sd = row["Scheduled date"]
         comment = str(row["Comments"] or "")
         # If a date is now set (and it's not past-due itself) and the comment is
         # still one of the auto-filled placeholders, clear it automatically.
         if pd.notna(sd):
-            if isinstance(sd, date):
-                sd_date = sd
-            else:
+            # convert anything (timestamp, datetime, string) to a plain date
+            try:
                 sd_date = pd.to_datetime(sd).date()
+            except Exception:
+                # fallback: if already has date() method
+                if hasattr(sd, "date"):
+                    sd_date = sd.date()
+                else:
+                    sd_date = sd
             date_is_current = sd_date >= today
         else:
             date_is_current = False
@@ -567,16 +614,17 @@ def save_overrides(
         # Auto-stamp time if user left Modified at blank
         if not modified_at:
             modified_at = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M ET")
-        cur.execute(
-            """
+        query = f"""
             INSERT INTO followup_overrides (order_key, follow_up, comments, modified_by, modified_at)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
             ON CONFLICT(order_key) DO UPDATE SET
                 follow_up=excluded.follow_up,
                 comments=excluded.comments,
                 modified_by=excluded.modified_by,
                 modified_at=excluded.modified_at
-            """,
+            """
+        cur.execute(
+            query,
             (row["order_key"], str(sd) if pd.notna(sd) else None, comment, modified_by, modified_at),
         )
     conn.commit()
