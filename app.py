@@ -578,7 +578,10 @@ def apply_overrides(df: pd.DataFrame, conn: sqlite3.Connection) -> pd.DataFrame:
 
 
 def save_overrides(
-    original: pd.DataFrame, edited: pd.DataFrame, conn: sqlite3.Connection
+    original: pd.DataFrame,
+    edited: pd.DataFrame,
+    conn: sqlite3.Connection,
+    current_user: str | None = None,
 ) -> int:
     cols = ["order_key", "Scheduled date", "Comments"]
     for c in cols:
@@ -629,7 +632,12 @@ def save_overrides(
             date_is_current = False
         if date_is_current and comment.strip() in (NEW_ORDER_COMMENT, PAST_DUE_COMMENT):
             comment = ""
-        modified_by = str(row.get("Modified by") or "").strip()
+        # Prefer the current session user name if provided; otherwise fall back
+        # to whatever is in the edited row.
+        if current_user:
+            modified_by = current_user.strip()
+        else:
+            modified_by = str(row.get("Modified by") or "").strip()
         modified_at = str(row.get("Modified at") or "").strip()
         # Auto-stamp time if user left Modified at blank
         if not modified_at:
@@ -831,6 +839,12 @@ def main() -> None:
         return
 
     conn = init_db()
+
+    # Identify the current user for audit trail of edits
+    user_name_default = st.session_state.get("user_name", "")
+    user_name = st.text_input("Your name (will appear in 'Modified by')", value=user_name_default).strip()
+    if user_name:
+        st.session_state["user_name"] = user_name
     all_files = get_all_pending_files()
 
     if not all_files:
@@ -891,7 +905,7 @@ def main() -> None:
         "Scheduled date": st.column_config.DateColumn("Scheduled date"),
         "⚠️": st.column_config.TextColumn("⚠️", disabled=True, width="small"),
         "Comments": st.column_config.TextColumn("Comments", width="large"),
-        "Modified by": st.column_config.TextColumn("Modified by", width="medium"),
+        "Modified by": st.column_config.TextColumn("Modified by", width="medium", disabled=True),
         "Modified at": st.column_config.TextColumn("Modified at", width="medium"),
     }
     for col in display_df.columns:
@@ -916,7 +930,7 @@ def main() -> None:
     col_save, col_mid, col_send = st.columns([2, 6, 2])
     with col_save:
         if st.button("💾  Save Changes", use_container_width=True):
-            n = save_overrides(base_df, edited_df, conn)
+            n = save_overrides(base_df, edited_df, conn, current_user=user_name or None)
             if n > 0:
                 st.success(f"✓ Saved {n} updated row(s).")
             else:
