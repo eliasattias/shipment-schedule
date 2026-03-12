@@ -18,45 +18,71 @@ to share updates you can point the app at a cloud database such as
 PostgreSQL. Streamlit Cloud, Heroku, Supabase, ElephantSQL, and many other
 services provide free or low-cost PostgreSQL instances.
 
-To enable:
+#### Using Supabase (recommended)
 
-1. Provision a PostgreSQL database and obtain its connection URL, which looks
-   like `postgresql://user:password@host:port/dbname`.
-2. Set the URL in your environment or Streamlit secrets using the key
-   `DATABASE_URL`.
+Supabase is a developer-friendly hosted PostgreSQL service with a generous free
+tier and an easy web UI. The steps below outline the minimal process:
 
-   ```python
-   # either in .streamlit/secrets.toml:
-   DATABASE_URL = "postgresql://..."
-   # or as an environment variable:
-   # export DATABASE_URL="postgresql://..."  (Linux/Mac)
-   # setx DATABASE_URL "postgresql://..."        (Windows)
+1. **Create a Supabase account** at https://supabase.com and log in.
+2. **Create a new project** and choose a name, password and region. You can
+   start with the free tier.
+3. Once the project is ready, go to **Settings → Database** and copy the
+   connection string labeled **Connection string**. It will look like:
+   `postgresql://postgres:[YOUR-PASSWORD]@db.lpwzixfqprgrhzeyplxq.supabase.co:5432/postgres`.
+4. Within the same settings page, go to **API → Project URL** and note the
+   base URL; you’ll need it for future Supabase client usage if you expand the
+   app.
+5. Add the `DATABASE_URL` to your Streamlit secrets or environment:
+   ```toml
+   # .streamlit/secrets.toml
+   DATABASE_URL = "postgresql://postgres:[YOUR-PASSWORD]@db.lpwzixfqprgrhzeyplxq.supabase.co:5432/postgres"
    ```
+   On Windows you can also `setx DATABASE_URL "postgresql://postgres:[YOUR-PASSWORD]@db.lpwzixfqprgrhzeyplxq.supabase.co:5432/postgres"`.
 
-3. Add `psycopg2-binary` to your `requirements.txt` (already included). Install
-   dependencies again if necessary:
+6. **Install dependencies** (if not already):
    ```powershell
    pip install -r requirements.txt
    ```
+   `psycopg2-binary` is already included in `requirements.txt`.
 
-4. The app will automatically detect the URL and use PostgreSQL. If no URL is
-   set it falls back to the local `orders.db` file.
+7. **Run the app** locally or deploy to Streamlit Cloud. The first run will
+   create the `followup_overrides` table in your Supabase database.
 
-5. **Migration:** If you already have overrides stored locally, you can
-   migrate them by dumping the SQLite table and importing into PostgreSQL. A
-   simple command-line sequence might look like:
-
+8. **Migrate existing overrides** (optional):
    ```bash
-   # export SQLite rows as CSV
    sqlite3 orders.db "SELECT * FROM followup_overrides;" > overrides.csv
-   # import into PostgreSQL (adjust flags as needed)
    psql "$DATABASE_URL" -c "\copy followup_overrides FROM 'overrides.csv' CSV;"
    ```
+   (psql is included with PostgreSQL client tools; you can also upload via
+   the Supabase SQL editor.)
 
-6. Once the cloud database is in use, multiple users and deployed app instances
-   will see each other's changes. Uploading a new file will still apply
-   overrides by matching `order_key` so existing rows aren’t overwritten but
-   updated.
+Once configured, every upload or save will read/write the shared Supabase
+table. Your teammates and other deployments will immediately see updates – no
+more lost edits when the page reloads.
+
+#### Generic PostgreSQL setup
+
+If you prefer another provider, the same steps apply: obtain a
+`postgresql://` URL, set `DATABASE_URL`, and ensure `psycopg2-binary` is
+installed. The app automatically detects the presence of the variable and
+switches backends.
+
+#### Migration
+
+If you already have overrides stored locally, you can migrate them by dumping
+the SQLite table and importing into PostgreSQL. A simple command-line
+sequence might look like:
+
+```bash
+# export SQLite rows as CSV
+sqlite3 orders.db "SELECT * FROM followup_overrides;" > overrides.csv
+# import into PostgreSQL (adjust flags as needed)
+psql "$DATABASE_URL" -c "\copy followup_overrides FROM 'overrides.csv' CSV;"
+```
+
+Once the cloud database is in use, multiple users and deployed app instances
+will see each other's changes. Uploading a new file still applies overrides by
+matching `order_key` so existing rows aren’t overwritten but updated.
 
 ### Python & virtual environment setup
 

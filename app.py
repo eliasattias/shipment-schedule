@@ -378,10 +378,15 @@ def init_db() -> Any:
     """
     db_url = st.secrets.get("DATABASE_URL", os.getenv("DATABASE_URL", ""))
     if db_url:
+        st.info("Using PostgreSQL database (shared overrides)")
         if psycopg2 is None:
             st.error("PostgreSQL support requires psycopg2; please add it to requirements.")
             st.stop()
-        conn = psycopg2.connect(db_url)
+        try:
+            conn = psycopg2.connect(db_url)
+        except Exception as e:
+            st.error(f"Unable to connect to PostgreSQL: {e}")
+            st.stop()
         cur = conn.cursor()
         cur.execute(
             """
@@ -398,6 +403,7 @@ def init_db() -> Any:
         return conn
 
     # no cloud URL, use local SQLite
+    st.info(f"Using local SQLite database at {DB_PATH}")
     conn = sqlite3.connect(DB_PATH)
     conn.execute(
         """
