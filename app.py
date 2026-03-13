@@ -617,7 +617,7 @@ def save_overrides(
     )
 
     merged = edited[required_cols].merge(
-        orig[["order_key", "_sd_orig", "_com_orig"]],
+        orig[["order_key", "_sd_orig", "_com_orig", "_mb_orig", "_ma_orig"]],
         on="order_key",
         how="left",
     )
