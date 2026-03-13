@@ -585,35 +585,40 @@ def save_overrides(
     """
     Persist overrides back to the database.
 
-    This version treats "Modified by" and "Modified at" as fully manual,
-    user-editable fields. We simply write whatever the user has typed in
-    those columns, without auto-populating names or timestamps.
+    "Modified by" and "Modified at" are treated as simple, manual fields:
+    whatever the user types there is what gets written. We don't try to
+    auto-populate or compare their previous values.
     """
-    cols = ["order_key", "Scheduled date", "Comments", "Modified by", "Modified at"]
-    for c in cols:
+    required_cols = ["order_key", "Scheduled date", "Comments", "Modified by", "Modified at"]
+    for c in required_cols:
         if c not in edited.columns:
             return 0
-    orig = original[cols].rename(
+
+    # Only use the original dataframe to detect changes in date/comments.
+    # If original doesn't have the audit columns, synthesize empty baselines.
+    base = original.copy()
+    if "Scheduled date" not in base.columns:
+        base["Scheduled date"] = pd.NaT
+    if "Comments" not in base.columns:
+        base["Comments"] = ""
+
+    orig = base[["order_key", "Scheduled date", "Comments"]].rename(
         columns={
             "Scheduled date": "_sd_orig",
             "Comments": "_com_orig",
-            "Modified by": "_mb_orig",
-            "Modified at": "_ma_orig",
         }
     )
-    merged = edited[cols].merge(
+
+    merged = edited[required_cols].merge(
         orig[["order_key", "_sd_orig", "_com_orig"]],
         on="order_key",
+        how="left",
     )
     merged["_sd_str"] = merged["Scheduled date"].astype(str)
     merged["_com_str"] = merged["Comments"].fillna("").astype(str)
-    merged["_mb_str"] = merged["Modified by"].fillna("").astype(str)
-    merged["_ma_str"] = merged["Modified at"].fillna("").astype(str)
     changed = merged[
         (merged["_sd_str"] != merged["_sd_orig"].astype(str))
         | (merged["_com_str"] != merged["_com_orig"].fillna("").astype(str))
-        | (merged["_mb_str"] != merged["_mb_orig"].fillna("").astype(str))
-        | (merged["_ma_str"] != merged["_ma_orig"].fillna("").astype(str))
     ]
 
     if changed.empty:
