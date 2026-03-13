@@ -390,7 +390,6 @@ def init_db() -> Any:
     """
     db_url = _get_secret("DATABASE_URL", "")
     if db_url:
-        st.info("Using PostgreSQL database (shared overrides)")
         if psycopg2 is None:
             st.error("PostgreSQL support requires psycopg2; please add it to requirements.")
             st.stop()
@@ -594,18 +593,26 @@ def save_overrides(
         if c not in edited.columns:
             return 0
 
-    # Only use the original dataframe to detect changes in date/comments.
-    # If original doesn't have the audit columns, synthesize empty baselines.
+    # Use the original dataframe to detect changes in date/comments and,
+    # when present, audit columns. If original doesn't have audit columns,
+    # synthesize empty baselines so we can still detect changes such as
+    # clearing "Modified by".
     base = original.copy()
     if "Scheduled date" not in base.columns:
         base["Scheduled date"] = pd.NaT
     if "Comments" not in base.columns:
         base["Comments"] = ""
+    if "Modified by" not in base.columns:
+        base["Modified by"] = ""
+    if "Modified at" not in base.columns:
+        base["Modified at"] = ""
 
-    orig = base[["order_key", "Scheduled date", "Comments"]].rename(
+    orig = base[["order_key", "Scheduled date", "Comments", "Modified by", "Modified at"]].rename(
         columns={
             "Scheduled date": "_sd_orig",
             "Comments": "_com_orig",
+            "Modified by": "_mb_orig",
+            "Modified at": "_ma_orig",
         }
     )
 
@@ -616,9 +623,13 @@ def save_overrides(
     )
     merged["_sd_str"] = merged["Scheduled date"].astype(str)
     merged["_com_str"] = merged["Comments"].fillna("").astype(str)
+    merged["_mb_str"] = merged["Modified by"].fillna("").astype(str)
+    merged["_ma_str"] = merged["Modified at"].fillna("").astype(str)
     changed = merged[
         (merged["_sd_str"] != merged["_sd_orig"].astype(str))
         | (merged["_com_str"] != merged["_com_orig"].fillna("").astype(str))
+        | (merged["_mb_str"] != merged["_mb_orig"].fillna("").astype(str))
+        | (merged["_ma_str"] != merged["_ma_orig"].fillna("").astype(str))
     ]
 
     if changed.empty:
