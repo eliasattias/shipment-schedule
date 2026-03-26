@@ -1,11 +1,10 @@
 name: Daily Email Automation
 
 on:
-  # schedule:
-  #   # Run daily at 9:00 AM UTC (adjust timezone as needed)
-  #   # This runs every day including weekends
-  #   - cron: '0 9 * * *'
-  workflow_dispatch: # Allow manual triggering only
+  schedule:
+    # Run weekdays at 9:00 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Allow manual triggering
 
 jobs:
   automate-email:
@@ -35,9 +34,8 @@ jobs:
 
     - name: Create credentials and token files from secrets
       run: |
-        # use printf to avoid stray newline characters
         printf '%s' "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | base64 --decode > credentials.json
-        printf '%s' "${{ secrets.TOKEN_PICKLE }}" | base64 --decode > token.pickle
+        printf '%s' "${{ secrets.GMAIL_TOKEN_JSON }}" > token.json
 
     - name: Create data directory
       run: mkdir -p data
@@ -52,6 +50,7 @@ jobs:
         NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
         SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
         SMTP_PORT: ${{ secrets.SMTP_PORT }}
+        RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         GIT_REMOTE: origin
         GIT_BRANCH: main
       run: python email_automation.py

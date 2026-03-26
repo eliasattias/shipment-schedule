@@ -10,7 +10,6 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-import pickle
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
@@ -18,13 +17,12 @@ def setup_oauth2():
     """Set up OAuth2 credentials for Gmail API access"""
 
     creds = None
-    token_path = Path(__file__).parent / 'token.pickle'
+    token_path = Path(__file__).parent / 'token.json'
     credentials_path = Path(__file__).parent / 'credentials.json'
 
     # Check if token already exists
     if token_path.exists():
-        with open(token_path, 'rb') as token:
-            creds = pickle.load(token)
+        creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
 
     # If credentials are invalid or don't exist, get new ones
     if not creds or not creds.valid:
@@ -32,7 +30,7 @@ def setup_oauth2():
             creds.refresh(Request())
         else:
             if not credentials_path.exists():
-                print("❌ credentials.json not found!")
+                print("credentials.json not found!")
                 print("You need to:")
                 print("1. Go to Google Cloud Console: https://console.cloud.google.com/")
                 print("2. Create a new project or select existing")
@@ -45,11 +43,11 @@ def setup_oauth2():
                 str(credentials_path), SCOPES)
             creds = flow.run_local_server(port=0)
 
-        # Save credentials
-        with open(token_path, 'wb') as token:
-            pickle.dump(creds, token)
+        # Save credentials as JSON
+        with open(token_path, 'w') as token:
+            token.write(creds.to_json())
 
-    print("✅ OAuth2 setup complete!")
+    print("OAuth2 setup complete!")
     print(f"Token saved to: {token_path}")
     return True
 
@@ -57,12 +55,11 @@ def test_gmail_api():
     """Test Gmail API access"""
     try:
         creds = None
-        token_path = Path(__file__).parent / 'token.pickle'
+        token_path = Path(__file__).parent / 'token.json'
 
-        with open(token_path, 'rb') as token:
-            creds = pickle.load(token)
+        creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
 
-        service = build('gmail', 'v1', credentials=creds)
+        service = build('gmail', 'v1', credentials=creds, static_discovery=False)
 
         # Test by getting user profile
         profile = service.users().getProfile(userId='me').execute()
