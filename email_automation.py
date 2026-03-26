@@ -49,7 +49,7 @@ class EmailAutomation:
 
         # Notification configuration (Resend)
         self.resend_api_key = os.getenv('RESEND_API_KEY', '')
-        self.notify_from = 'Sensimedical Pending Orders Schedule <info@sensimedical.com>'
+        self.notify_from = 'Sensimedical Pending Orders Schedule <automations@sensimedical.com>'
         self.notify_emails = [
             'automations@sensimedical.com',
             'alice.s@sensimedical.com',

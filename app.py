@@ -47,7 +47,7 @@ NOTIFY_EMAILS = [
     "fstivers@optimalmax.com",
     "tperez@optimalmax.com"
 ]
-NOTIFY_FROM    = "Sensimedical Pending Orders Schedule <info@sensimedical.com>"
+NOTIFY_FROM    = "Sensimedical Pending Orders Schedule <automations@sensimedical.com>"
 
 SENSIMEDICAL_CSS = """
 <style>
