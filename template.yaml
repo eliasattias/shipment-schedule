@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Shipment schedule email automation - downloads order file from Gmail daily at 8 AM ET
+
+Parameters:
+  GmailTokenSecretArn:
+    Type: String
+    Description: ARN of Secrets Manager secret with key GMAIL_TOKEN_JSON
+  SearchSubject:
+    Type: String
+    Default: 'Sensi Medical Sales Open Order'
+    Description: Email subject to search for
+  SearchSender:
+    Type: String
+    Default: 'customercare@optimalmax.com'
+    Description: Email sender to search for
+  TargetFilename:
+    Type: String
+    Default: 'searchresults.xlsx'
+    Description: Target filename for downloaded attachment
+  ResendApiKey:
+    Type: String
+    NoEcho: true
+    Description: Resend API key for notification emails
+  GoogleCredentialsJson:
+    Type: String
+    NoEcho: true
+    Description: Base64-encoded Google OAuth credentials.json
+
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 256
+    Runtime: python3.13
+
+Resources:
+  ShipmentScheduleFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        Manifest: requirements-lambda.txt
+    Properties:
+      Handler: lambda_handler.handler
+      CodeUri: .
+      Description: Download shipment schedule from Gmail and send notification
+      Environment:
+        Variables:
+          GMAIL_TOKEN_SECRET_ARN: !Ref GmailTokenSecretArn
+          SEARCH_SUBJECT: !Ref SearchSubject
+          SEARCH_SENDER: !Ref SearchSender
+          TARGET_FILENAME: !Ref TargetFilename
+          RESEND_API_KEY: !Ref ResendApiKey
+          GOOGLE_CREDENTIALS_JSON: !Ref GoogleCredentialsJson
+      Events:
+        Schedule8am:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 12 * * ? *)
+            Input: '{"run_label":"8am"}'
+            Description: Run at 8 AM ET (12:00 UTC)
+            Enabled: true
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref GmailTokenSecretArn
+
+Outputs:
+  ShipmentScheduleFunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt ShipmentScheduleFunction.Arn

@@ -6,37 +6,17 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
 *.egg
 
 # Virtual environments
 .venv/
 venv/
-ENV/
-env/
 
 # IDE
 .vscode/
 .idea/
 .claude/
-*.swp
-*.swo
 
 # OS
 .DS_Store
@@ -44,12 +24,13 @@ Thumbs.db
 
 # Logs
 *.log
-logs/
 
 # OAuth2 credentials
-token.pickle
 token.json
 credentials.json
 
-# Streamlit local secrets (never commit)
+# Streamlit local secrets
 .streamlit/secrets.toml
+
+# AWS SAM
+.aws-sam/

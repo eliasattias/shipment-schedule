@@ -1,0 +1,15 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "shipment-schedule"
+template_file = ".aws-sam/build/template.yaml"
+resolve_s3 = true
+s3_prefix = "shipment-schedule"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "GmailTokenSecretArn=\"arn:aws:secretsmanager:us-east-1:092042970041:secret:GMAIL_TOKEN_JSON-N5dwSK\" SearchSubject=\"Sensi Medical Sales Open Order\" SearchSender=\"customercare@optimalmax.com\" TargetFilename=\"searchresults.xlsx\" ResendApiKey=\"re_5tAASry1_NWb299uxfy8zU5NhBCbtcGuT\" GoogleCredentialsJson=\"\""
+image_repositories = []
+
+[default.global.parameters]
+region = "us-east-1"

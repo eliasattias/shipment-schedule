@@ -7,7 +7,10 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import openpyxl as oxl
 import logging
-import git
+try:
+    import git
+except ImportError:
+    git = None
 import requests as http_requests
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -18,20 +21,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configure logging
+_handlers = [logging.StreamHandler()]
+if not os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+    _handlers.append(logging.FileHandler('email_automation.log'))
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('email_automation.log'),
-        logging.StreamHandler()
-    ]
+    handlers=_handlers,
 )
 
 class EmailAutomation:
     def __init__(self):
         # File configuration
         self.base_dir = Path(__file__).parent
-        self.data_dir = self.base_dir / "data"
+        # Lambda can only write to /tmp
+        if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+            self.data_dir = Path('/tmp') / "data"
+        else:
+            self.data_dir = self.base_dir / "data"
         self.target_filename = os.getenv('TARGET_FILENAME', 'searchresults.xlsx')
         self.token_path = self.base_dir / 'token.json'
         self.gmail_token_json = os.getenv('GMAIL_TOKEN_JSON', '')
@@ -42,8 +49,8 @@ class EmailAutomation:
 
         # Git configuration (optional)
         try:
-            self.git_repo = git.Repo(self.base_dir)
-        except:
+            self.git_repo = git.Repo(self.base_dir) if git else None
+        except Exception:
             self.git_repo = None
             logging.warning("Git repository not available - git operations will be skipped")
 
