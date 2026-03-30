@@ -7,10 +7,6 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import openpyxl as oxl
 import logging
-try:
-    import git
-except ImportError:
-    git = None
 import requests as http_requests
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -46,16 +42,6 @@ class EmailAutomation:
         # Search configuration
         self.search_subject = os.getenv('SEARCH_SUBJECT', 'Sensi Medical Sales Open Order')
         self.search_sender = os.getenv('SEARCH_SENDER', 'customercare@optimalmax.com')
-
-        # Git configuration (optional)
-        try:
-            self.git_repo = git.Repo(self.base_dir) if git else None
-        except Exception:
-            self.git_repo = None
-            logging.warning("Git repository not available - git operations will be skipped")
-
-        self.git_remote = os.getenv('GIT_REMOTE', 'origin')
-        self.git_branch = os.getenv('GIT_BRANCH', 'main')
 
         # Notification configuration (Resend)
         self.resend_api_key = os.getenv('RESEND_API_KEY', '')
@@ -326,41 +312,6 @@ class EmailAutomation:
             logging.error(f"Validation error: {e}")
             return False
 
-    def commit_and_push(self, filepath):
-        """Commit and push changes to git (optional - may be handled by CI/CD)"""
-        try:
-            if not self.git_repo:
-                logging.info("Git repository not available - skipping git operations")
-                return True
-
-            # Check if we should handle git operations ourselves
-            if os.getenv('GITHUB_ACTIONS') == 'true':
-                logging.info("Running in GitHub Actions - skipping manual git operations")
-                return True
-
-            # Add file to git
-            self.git_repo.index.add([str(filepath.relative_to(self.base_dir))])
-
-            # Check if there are changes
-            if not self.git_repo.index.diff("HEAD"):
-                logging.info("No changes to commit")
-                return True
-
-            # Commit changes
-            commit_message = f"Auto-update: {self.target_filename} from email - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            self.git_repo.index.commit(commit_message)
-
-            # Push changes
-            origin = self.git_repo.remote(self.git_remote)
-            origin.push(self.git_branch)
-
-            logging.info(f"Successfully committed and pushed changes: {commit_message}")
-            return True
-
-        except Exception as e:
-            logging.warning(f"Git operations failed (this may be expected in CI/CD): {e}")
-            return True
-
     def send_notification(self, success, message):
         """Send notification email via Resend"""
         if not self.resend_api_key:
@@ -447,15 +398,9 @@ class EmailAutomation:
                 self.send_notification(False, message)
                 return
 
-            # Commit and push
-            if self.commit_and_push(filepath):
-                message = f"Successfully updated {self.target_filename}"
-                logging.info(message)
-                self.send_notification(True, message)
-            else:
-                message = "Failed to commit and push changes"
-                logging.error(message)
-                self.send_notification(False, message)
+            message = f"Successfully updated {self.target_filename}"
+            logging.info(message)
+            self.send_notification(True, message)
 
         except Exception as e:
             error_msg = f"Automation failed: {str(e)}"
