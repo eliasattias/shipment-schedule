@@ -60,6 +60,13 @@ Resources:
             Input: '{"run_label":"8am"}'
             Description: Run at 8 AM ET (12:00 UTC)
             Enabled: true
+        ReminderTuesThu:
+          Type: Schedule
+          Properties:
+            Schedule: cron(30 13 ? * TUE,THU *)
+            Input: '{"run_label":"reminder"}'
+            Description: Send reminder email Tue/Thu at 9:30 AM ET (13:30 UTC)
+            Enabled: true
       Policies:
         - Version: '2012-10-17'
           Statement:

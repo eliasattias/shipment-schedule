@@ -363,6 +363,56 @@ class EmailAutomation:
             logger.error(f"Failed to push to GitHub: {e}")
             return False
 
+    def send_reminder(self):
+        """Send Tuesday/Thursday reminder to update the console"""
+        if not self.resend_api_key:
+            logger.warning("RESEND_API_KEY not set - skipping reminder")
+            return
+
+        try:
+            html_body = (
+                '<p>Hi Tina,</p>'
+                '<p>Just a reminder to please update the '
+                '<a href="https://sensimedical-shipment-schedule.streamlit.app/">console</a>'
+                ' today. Thank you in advance!</p>'
+                '<hr>'
+                '<p>This is an automated message.</p>'
+            )
+
+            resp = http_requests.post(
+                'https://api.resend.com/emails',
+                headers={
+                    'Authorization': f'Bearer {self.resend_api_key}',
+                    'Content-Type': 'application/json',
+                },
+                json={
+                    'from': self.notify_from,
+                    'to': [
+                        'customercare@optimalmax.com',
+                        'FStivers@OptimalMax.com',
+                        'cjohnson@optimalmax.com',
+                        'SBroussard@optimalmax.com',
+                        'TPerez@optimalmax.com',
+                        'PBigley@optimalmax.com',
+                    ],
+                    'cc': [
+                        'alice.s@sensimedical.com',
+                        'eduardo.s@sensimedical.com',
+                    ],
+                    'subject': 'Reminder: Please Update the Shipment Schedule Console',
+                    'html': html_body,
+                },
+                timeout=10,
+            )
+
+            if resp.status_code in (200, 201):
+                logger.info("Reminder email sent via Resend")
+            else:
+                logger.error(f"Resend error {resp.status_code}: {resp.text}")
+
+        except Exception as e:
+            logger.error(f"Failed to send reminder: {e}")
+
     def send_notification(self, success, message):
         """Send notification email via Resend"""
         if not self.resend_api_key:

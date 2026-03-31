@@ -30,5 +30,11 @@ def handler(event, context):
     _load_gmail_token_from_secrets()
     from email_automation import EmailAutomation
     automation = EmailAutomation()
-    automation.run_automation()
+
+    run_label = (event or {}).get("run_label", "")
+    if run_label == "reminder":
+        automation.send_reminder()
+    else:
+        automation.run_automation()
+
     return {"statusCode": 200, "body": "OK"}
