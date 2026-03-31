@@ -22,10 +22,10 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Resend API key for notification emails
-  GoogleCredentialsJson:
+  GitHubToken:
     Type: String
     NoEcho: true
-    Description: Base64-encoded Google OAuth credentials.json
+    Description: GitHub personal access token for pushing files to the repo
 
 Globals:
   Function:
@@ -50,7 +50,8 @@ Resources:
           SEARCH_SENDER: !Ref SearchSender
           TARGET_FILENAME: !Ref TargetFilename
           RESEND_API_KEY: !Ref ResendApiKey
-          GOOGLE_CREDENTIALS_JSON: !Ref GoogleCredentialsJson
+          GITHUB_TOKEN: !Ref GitHubToken
+          GITHUB_REPO: 'Sensimedical/shipment-schedule'
       Events:
         Schedule8am:
           Type: Schedule

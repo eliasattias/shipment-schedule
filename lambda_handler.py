@@ -5,9 +5,12 @@ Set config via Lambda env vars; Gmail token from Secrets Manager (GMAIL_TOKEN_SE
 """
 
 import json
+import logging
 import os
 
 import boto3
+
+logging.getLogger().setLevel(logging.INFO)
 
 
 def _load_gmail_token_from_secrets():

@@ -17,14 +17,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configure logging
-_handlers = [logging.StreamHandler()]
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logger.addHandler(_handler)
 if not os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
-    _handlers.append(logging.FileHandler('email_automation.log'))
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=_handlers,
-)
+    _fh = logging.FileHandler('email_automation.log')
+    _fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logger.addHandler(_fh)
 
 class EmailAutomation:
     def __init__(self):
@@ -42,6 +44,10 @@ class EmailAutomation:
         # Search configuration
         self.search_subject = os.getenv('SEARCH_SUBJECT', 'Sensi Medical Sales Open Order')
         self.search_sender = os.getenv('SEARCH_SENDER', 'customercare@optimalmax.com')
+
+        # GitHub configuration (for pushing updated file to repo)
+        self.github_token = os.getenv('GITHUB_TOKEN', '')
+        self.github_repo = os.getenv('GITHUB_REPO', 'Sensimedical/shipment-schedule')
 
         # Notification configuration (Resend)
         self.resend_api_key = os.getenv('RESEND_API_KEY', '')
@@ -75,13 +81,13 @@ class EmailAutomation:
                         f.write(creds.to_json())
 
             if not creds or not creds.valid:
-                logging.error("No valid Gmail credentials found. Run oauth2_setup.py first.")
+                logger.error("No valid Gmail credentials found. Run oauth2_setup.py first.")
                 return None
 
             return build('gmail', 'v1', credentials=creds, static_discovery=False)
 
         except Exception as e:
-            logging.error(f"Failed to get Gmail service: {e}")
+            logger.error(f"Failed to get Gmail service: {e}")
             return None
 
     def search_emails(self, service, days_back=1):
@@ -98,7 +104,7 @@ class EmailAutomation:
 
             query += ' has:attachment filename:(xls OR xlsx)'
 
-            logging.info(f"Searching with query: {query}")
+            logger.info(f"Searching with query: {query}")
 
             results = service.users().messages().list(
                 userId='me',
@@ -107,11 +113,11 @@ class EmailAutomation:
             ).execute()
 
             messages = results.get('messages', [])
-            logging.info(f"Found {len(messages)} matching emails")
+            logger.info(f"Found {len(messages)} matching emails")
             return messages
 
         except Exception as e:
-            logging.error(f"Failed to search emails: {e}")
+            logger.error(f"Failed to search emails: {e}")
             raise
 
     def convert_spreadsheetml_to_xlsx(self, src_path, dest_path):
@@ -180,37 +186,37 @@ class EmailAutomation:
         try:
             df = pd.read_excel(src_path, engine='xlrd')
             df.to_excel(dest_path, index=False)
-            logging.info(f"Converted via xlrd: {src_path.name}")
+            logger.info(f"Converted via xlrd: {src_path.name}")
             return True
         except Exception as e1:
-            logging.debug(f"xlrd failed: {e1}")
+            logger.debug(f"xlrd failed: {e1}")
 
         # Strategy 2: openpyxl engine (xlsx mis-named as .xls)
         try:
             df = pd.read_excel(src_path, engine='openpyxl')
             df.to_excel(dest_path, index=False)
-            logging.info(f"Converted via openpyxl: {src_path.name}")
+            logger.info(f"Converted via openpyxl: {src_path.name}")
             return True
         except Exception as e2:
-            logging.debug(f"openpyxl failed: {e2}")
+            logger.debug(f"openpyxl failed: {e2}")
 
         # Strategy 3: HTML table parsing
         try:
             tables = pd.read_html(str(src_path), flavor="lxml")
             if tables:
                 tables[0].to_excel(dest_path, index=False)
-                logging.info(f"Converted via HTML table parsing: {src_path.name}")
+                logger.info(f"Converted via HTML table parsing: {src_path.name}")
                 return True
         except Exception as e3:
-            logging.debug(f"HTML fallback failed: {e3}")
+            logger.debug(f"HTML fallback failed: {e3}")
 
         # Strategy 4: SpreadsheetML XML
         try:
             self.convert_spreadsheetml_to_xlsx(str(src_path), str(dest_path))
-            logging.info(f"Converted via SpreadsheetML XML: {src_path.name}")
+            logger.info(f"Converted via SpreadsheetML XML: {src_path.name}")
             return True
         except Exception as e4:
-            logging.debug(f"SpreadsheetML failed: {e4}")
+            logger.debug(f"SpreadsheetML failed: {e4}")
 
         return False
 
@@ -223,7 +229,7 @@ class EmailAutomation:
             subject = next((h['value'] for h in headers if h['name'] == 'Subject'), 'Unknown')
             sender = next((h['value'] for h in headers if h['name'] == 'From'), 'Unknown')
 
-            logging.info(f"Processing email from {sender}: {subject}")
+            logger.info(f"Processing email from {sender}: {subject}")
 
             # Find and download attachment
             if 'parts' in message['payload']:
@@ -250,7 +256,7 @@ class EmailAutomation:
                             # Convert if .xls, otherwise just move
                             if raw_path.suffix.lower() == '.xls':
                                 if not self.convert_to_xlsx(raw_path, final_path):
-                                    logging.warning("All conversion strategies failed, using raw file")
+                                    logger.warning("All conversion strategies failed, using raw file")
                                     raw_path.replace(final_path)
                                 # Clean up raw .xls if final is different file
                                 if raw_path.exists() and raw_path != final_path:
@@ -258,13 +264,13 @@ class EmailAutomation:
                             else:
                                 raw_path.replace(final_path)
 
-                            logging.info(f"Downloaded attachment: {filename} -> {final_path}")
+                            logger.info(f"Downloaded attachment: {filename} -> {final_path}")
                             return final_path
 
             return None
 
         except Exception as e:
-            logging.error(f"Failed to download attachment from message {message_id}: {e}")
+            logger.error(f"Failed to download attachment from message {message_id}: {e}")
             return None
 
     def validate_excel_file(self, filepath):
@@ -272,25 +278,25 @@ class EmailAutomation:
         try:
             # Check file exists and has content
             if not filepath.exists():
-                logging.error(f"File does not exist: {filepath}")
+                logger.error(f"File does not exist: {filepath}")
                 return False
             
             file_size = filepath.stat().st_size
             if file_size == 0:
-                logging.error(f"Downloaded file is empty: {filepath}")
+                logger.error(f"Downloaded file is empty: {filepath}")
                 return False
             
-            logging.info(f"File downloaded successfully: {filepath} ({file_size} bytes)")
+            logger.info(f"File downloaded successfully: {filepath} ({file_size} bytes)")
             
             # Try to read with any available engine
             for engine in ['openpyxl', 'lxml', 'xlrd']:
                 try:
                     df = pd.read_excel(filepath, engine=engine)
                     if not df.empty:
-                        logging.info(f"Validated with {engine}: {len(df)} rows, {len(df.columns)} columns")
+                        logger.info(f"Validated with {engine}: {len(df)} rows, {len(df.columns)} columns")
                         return True
                 except Exception as e:
-                    logging.debug(f"Engine {engine} failed: {str(e)[:80]}")
+                    logger.debug(f"Engine {engine} failed: {str(e)[:80]}")
                     continue
             
             # last ditch: if file still cannot be read but has .xls extension,
@@ -299,27 +305,72 @@ class EmailAutomation:
                 try:
                     df = pd.read_excel(filepath, engine='xlrd')
                     df.to_excel(filepath.with_suffix('.xlsx'), index=False)
-                    logging.info(f"Converted failing .xls to .xlsx for validation")
+                    logger.info(f"Converted failing .xls to .xlsx for validation")
                     return self.validate_excel_file(filepath.with_suffix('.xlsx'))
                 except Exception:
                     pass
 
             # Log warning but return True since file was downloaded successfully
-            logging.warning(f"Could not parse file as Excel, but file exists and has content")
+            logger.warning(f"Could not parse file as Excel, but file exists and has content")
             return True
             
         except Exception as e:
-            logging.error(f"Validation error: {e}")
+            logger.error(f"Validation error: {e}")
+            return False
+
+    def push_to_github(self, filepath):
+        """Push the updated file to GitHub via the Contents API"""
+        if not self.github_token:
+            logger.warning("GITHUB_TOKEN not set - skipping GitHub push")
+            return False
+
+        try:
+            repo_path = f"data/{self.target_filename}"
+            api_url = f"https://api.github.com/repos/{self.github_repo}/contents/{repo_path}"
+            headers = {
+                'Authorization': f'token {self.github_token}',
+                'Accept': 'application/vnd.github.v3+json',
+            }
+
+            # Get current file SHA (required for update)
+            sha = None
+            resp = http_requests.get(api_url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                sha = resp.json()['sha']
+
+            # Read and encode file content
+            with open(filepath, 'rb') as f:
+                content = base64.b64encode(f.read()).decode()
+
+            now_str = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d %I:%M %p ET')
+            payload = {
+                'message': f'Auto-update: {self.target_filename} - {now_str}',
+                'content': content,
+                'branch': 'main',
+            }
+            if sha:
+                payload['sha'] = sha
+
+            resp = http_requests.put(api_url, headers=headers, json=payload, timeout=30)
+            if resp.status_code in (200, 201):
+                logger.info("File pushed to GitHub successfully")
+                return True
+            else:
+                logger.error(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Failed to push to GitHub: {e}")
             return False
 
     def send_notification(self, success, message):
         """Send notification email via Resend"""
         if not self.resend_api_key:
-            logging.warning("RESEND_API_KEY not set - skipping notification")
+            logger.warning("RESEND_API_KEY not set - skipping notification")
             return
 
         if not success:
-            logging.info("Automation did not succeed - skipping notification email")
+            logger.info("Automation did not succeed - skipping notification email")
             return
 
         try:
@@ -350,16 +401,16 @@ class EmailAutomation:
             )
 
             if resp.status_code in (200, 201):
-                logging.info("Notification email sent via Resend")
+                logger.info("Notification email sent via Resend")
             else:
-                logging.error(f"Resend error {resp.status_code}: {resp.text}")
+                logger.error(f"Resend error {resp.status_code}: {resp.text}")
 
         except Exception as e:
-            logging.error(f"Failed to send notification: {e}")
+            logger.error(f"Failed to send notification: {e}")
 
     def run_automation(self):
         """Main automation function"""
-        logging.info("Starting email automation using Gmail API")
+        logger.info("Starting email automation using Gmail API")
 
         try:
             # Ensure data directory exists
@@ -369,7 +420,7 @@ class EmailAutomation:
             service = self.get_gmail_service()
             if not service:
                 message = "Failed to authenticate with Gmail API"
-                logging.error(message)
+                logger.error(message)
                 self.send_notification(False, message)
                 return
 
@@ -377,7 +428,7 @@ class EmailAutomation:
             messages = self.search_emails(service)
             if not messages:
                 message = "No matching emails found"
-                logging.info(message)
+                logger.info(message)
                 self.send_notification(False, message)
                 return
 
@@ -387,24 +438,27 @@ class EmailAutomation:
 
             if not filepath:
                 message = "No XLS attachment found in emails"
-                logging.error(message)
+                logger.error(message)
                 self.send_notification(False, message)
                 return
 
             # Validate file
             if not self.validate_excel_file(filepath):
                 message = "Downloaded file is not a valid Excel file"
-                logging.error(message)
+                logger.error(message)
                 self.send_notification(False, message)
                 return
 
+            # Push to GitHub so Streamlit Cloud picks up the new file
+            self.push_to_github(filepath)
+
             message = f"Successfully updated {self.target_filename}"
-            logging.info(message)
+            logger.info(message)
             self.send_notification(True, message)
 
         except Exception as e:
             error_msg = f"Automation failed: {str(e)}"
-            logging.error(error_msg)
+            logger.error(error_msg)
             self.send_notification(False, error_msg)
 
 if __name__ == "__main__":

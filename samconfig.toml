@@ -8,7 +8,7 @@ s3_prefix = "shipment-schedule"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 disable_rollback = true
-parameter_overrides = "GmailTokenSecretArn=\"arn:aws:secretsmanager:us-east-1:092042970041:secret:GMAIL_TOKEN_JSON-N5dwSK\" SearchSubject=\"Sensi Medical Sales Open Order\" SearchSender=\"customercare@optimalmax.com\" TargetFilename=\"searchresults.xlsx\" ResendApiKey=\"re_5tAASry1_NWb299uxfy8zU5NhBCbtcGuT\" GoogleCredentialsJson=\"\""
+parameter_overrides = "GmailTokenSecretArn=\"arn:aws:secretsmanager:us-east-1:092042970041:secret:GMAIL_TOKEN_JSON-N5dwSK\" SearchSubject=\"Sensi Medical Sales Open Order\" SearchSender=\"customercare@optimalmax.com\" TargetFilename=\"searchresults.xlsx\" ResendApiKey=\"re_5tAASry1_NWb299uxfy8zU5NhBCbtcGuT\" GitHubToken=\"SET_VIA_CLI\""
 image_repositories = []
 
 [default.global.parameters]
