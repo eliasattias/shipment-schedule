@@ -26,6 +26,10 @@ Parameters:
     Type: String
     NoEcho: true
     Description: GitHub personal access token for pushing files to the repo
+  EmailSmtpPassword:
+    Type: String
+    NoEcho: true
+    Description: Gmail app password for SMTP reminder emails
 
 Globals:
   Function:
@@ -52,6 +56,8 @@ Resources:
           RESEND_API_KEY: !Ref ResendApiKey
           GITHUB_TOKEN: !Ref GitHubToken
           GITHUB_REPO: 'Sensimedical/shipment-schedule'
+          EMAIL_SMTP_USERNAME: 'automations@sensimedical.com'
+          EMAIL_SMTP_PASSWORD: !Ref EmailSmtpPassword
       Events:
         Schedule8am:
           Type: Schedule

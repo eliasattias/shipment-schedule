@@ -7,6 +7,9 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import openpyxl as oxl
 import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import requests as http_requests
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -49,7 +52,13 @@ class EmailAutomation:
         self.github_token = os.getenv('GITHUB_TOKEN', '')
         self.github_repo = os.getenv('GITHUB_REPO', 'Sensimedical/shipment-schedule')
 
-        # Notification configuration (Resend)
+        # SMTP configuration (for reminder emails to external domains)
+        self.smtp_host = os.getenv('EMAIL_SMTP_HOST', 'smtp.gmail.com')
+        self.smtp_port = int(os.getenv('EMAIL_SMTP_PORT', '587'))
+        self.smtp_user = os.getenv('EMAIL_SMTP_USERNAME', 'automations@sensimedical.com')
+        self.smtp_password = os.getenv('EMAIL_SMTP_PASSWORD', '')
+
+        # Notification configuration (Resend — for internal sensimedical emails)
         self.resend_api_key = os.getenv('RESEND_API_KEY', '')
         self.notify_from = 'Sensimedical Pending Orders Schedule <automations@sensimedical.com>'
         self.notify_emails = [
@@ -364,12 +373,31 @@ class EmailAutomation:
             return False
 
     def send_reminder(self):
-        """Send Tuesday/Thursday reminder to update the console"""
-        if not self.resend_api_key:
-            logger.warning("RESEND_API_KEY not set - skipping reminder")
+        """Send Tuesday/Thursday reminder to update the console via SMTP"""
+        if not self.smtp_password:
+            logger.warning("EMAIL_SMTP_PASSWORD not set - skipping reminder")
             return
 
         try:
+            to_addrs = [
+                'customercare@optimalmax.com',
+                'FStivers@OptimalMax.com',
+                'cjohnson@optimalmax.com',
+                'SBroussard@optimalmax.com',
+                'TPerez@optimalmax.com',
+                'PBigley@optimalmax.com',
+            ]
+            cc_addrs = [
+                'alice.s@sensimedical.com',
+                'eduardo.s@sensimedical.com',
+            ]
+
+            msg = MIMEMultipart('alternative')
+            msg['From'] = self.smtp_user
+            msg['To'] = ', '.join(to_addrs)
+            msg['Cc'] = ', '.join(cc_addrs)
+            msg['Subject'] = 'Reminder: Please Update the Shipment Schedule Console'
+
             html_body = (
                 '<p>Hi Tina,</p>'
                 '<p>Just a reminder to please update the '
@@ -378,37 +406,14 @@ class EmailAutomation:
                 '<hr>'
                 '<p>This is an automated message.</p>'
             )
+            msg.attach(MIMEText(html_body, 'html'))
 
-            resp = http_requests.post(
-                'https://api.resend.com/emails',
-                headers={
-                    'Authorization': f'Bearer {self.resend_api_key}',
-                    'Content-Type': 'application/json',
-                },
-                json={
-                    'from': self.notify_from,
-                    'to': [
-                        'customercare@optimalmax.com',
-                        'FStivers@OptimalMax.com',
-                        'cjohnson@optimalmax.com',
-                        'SBroussard@optimalmax.com',
-                        'TPerez@optimalmax.com',
-                        'PBigley@optimalmax.com',
-                    ],
-                    'cc': [
-                        'alice.s@sensimedical.com',
-                        'eduardo.s@sensimedical.com',
-                    ],
-                    'subject': 'Reminder: Please Update the Shipment Schedule Console',
-                    'html': html_body,
-                },
-                timeout=10,
-            )
+            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=30) as smtp:
+                smtp.starttls()
+                smtp.login(self.smtp_user, self.smtp_password)
+                smtp.send_message(msg, to_addrs=to_addrs + cc_addrs)
 
-            if resp.status_code in (200, 201):
-                logger.info("Reminder email sent via Resend")
-            else:
-                logger.error(f"Resend error {resp.status_code}: {resp.text}")
+            logger.info("Reminder email sent via SMTP")
 
         except Exception as e:
             logger.error(f"Failed to send reminder: {e}")
