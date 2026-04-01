@@ -957,7 +957,7 @@ def main() -> None:
             else:
                 st.info("No changes to save.")
     with col_mid:
-        st.caption("Changes are stored locally and applied automatically across file versions.")
+        st.caption("Changes are saved to the database and applied automatically across file versions.")
     with col_send:
         if st.button("✉  Send Update", use_container_width=True, key="send_update"):
             ok, msg = send_update_email(df)
